@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { KpiCards } from "@/components/dashboard/KpiCards";
@@ -12,9 +13,9 @@ import { Download, Plus } from "lucide-react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Workforce.iQ — Employee Workforce Intelligence" },
+      { title: "Workforce Vision — Employee Work Tracking System" },
       { name: "description", content: "Professional workforce monitoring with attendance, GPS tracking, productivity analytics and AI insights." },
-      { property: "og:title", content: "Workforce.iQ Dashboard" },
+      { property: "og:title", content: "Workforce Vision Dashboard" },
       { property: "og:description", content: "Professional workforce intelligence platform." },
     ],
   }),
@@ -22,6 +23,16 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is authenticated
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      navigate({ to: '/login' });
+    }
+  }, [navigate]);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
