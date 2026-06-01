@@ -1,39 +1,33 @@
-import { Search, Bell, Sun, Command } from "lucide-react";
+import { Search, Bell, Command, ChevronDown } from "lucide-react";
 
 export function TopBar() {
   return (
-    <header className="glass sticky top-0 z-30 mb-6 flex items-center gap-4 rounded-3xl px-4 py-3">
-      <div className="lg:hidden grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-electric to-violet-glow">
-        <span className="font-display text-sm font-bold text-white">WI</span>
-      </div>
-      <div className="hidden md:flex items-center gap-2 pl-2">
-        <span className="font-display text-lg font-semibold tracking-tight">Workforce<span className="text-cyan-glow">.</span>iQ</span>
-        <span className="ml-2 rounded-full bg-emerald-glow/15 px-2 py-0.5 text-[10px] font-medium text-emerald-glow ring-1 ring-emerald-glow/30">LIVE</span>
-      </div>
-
-      <div className="relative ml-2 flex-1 max-w-xl">
+    <header className="sticky top-0 z-30 -mx-6 mb-6 flex items-center gap-4 border-b border-border bg-background/85 px-6 py-3 backdrop-blur-md">
+      <div className="relative flex-1 max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           placeholder="Search employees, sites, reports…"
-          className="h-10 w-full rounded-2xl border border-white/10 bg-white/5 pl-10 pr-16 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none transition focus:border-electric/50 focus:bg-white/10 focus:ring-2 focus:ring-electric/20"
+          className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-14 text-sm outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
         />
-        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground ring-1 ring-white/10">
-          <Command className="h-3 w-3" /> K
+        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          <Command className="h-3 w-3" />K
         </kbd>
       </div>
 
-      <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 ring-1 ring-white/10 hover:bg-white/10 transition">
-        <Sun className="h-4 w-4" />
-      </button>
-      <button className="relative grid h-10 w-10 place-items-center rounded-2xl bg-white/5 ring-1 ring-white/10 hover:bg-white/10 transition">
-        <Bell className="h-4 w-4" />
-        <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-glow shadow-[0_0_8px_var(--emerald-glow)]" />
-      </button>
-      <div className="flex items-center gap-3 rounded-2xl bg-white/5 py-1 pl-1 pr-3 ring-1 ring-white/10">
-        <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-violet-glow to-electric font-display text-xs font-bold text-white">AK</div>
-        <div className="hidden sm:block text-left leading-tight">
-          <div className="text-xs font-medium">Ana Kowalski</div>
-          <div className="text-[10px] text-muted-foreground">Operations Lead</div>
+      <div className="ml-auto flex items-center gap-2">
+        <button className="hidden h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-muted md:flex">
+          This week <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+        <button className="relative grid h-9 w-9 place-items-center rounded-lg border border-border bg-card hover:bg-muted">
+          <Bell className="h-4 w-4" />
+          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary" />
+        </button>
+        <div className="flex h-9 items-center gap-2.5 rounded-lg border border-border bg-card pl-1 pr-3">
+          <div className="grid h-7 w-7 place-items-center rounded-md bg-primary font-display text-[11px] font-semibold text-primary-foreground">AK</div>
+          <div className="hidden text-left leading-tight sm:block">
+            <div className="text-xs font-medium">Ana Kowalski</div>
+            <div className="text-[10px] text-muted-foreground">Operations Lead</div>
+          </div>
         </div>
       </div>
     </header>
