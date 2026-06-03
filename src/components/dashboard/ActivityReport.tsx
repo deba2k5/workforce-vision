@@ -3,7 +3,9 @@ import { Download, Loader2, FileText, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { workTrackingAPI } from '@/lib/api';
 
 interface ActivityData {
   date: string;
@@ -13,9 +15,13 @@ interface ActivityData {
   productivity: number;
 }
 
+interface ActivityReportProps {
+  employeeId: string;
+}
+
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export function ActivityReport() {
+export default function ActivityReport({ employeeId }: ActivityReportProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activityData, setActivityData] = useState<ActivityData[]>([
@@ -31,23 +37,44 @@ export function ActivityReport() {
     const loadActivityData = async () => {
       setIsLoading(true);
       try {
-        const employeeId = localStorage.getItem('employeeId') || 'EMP001';
         const endDate = new Date().toISOString().split('T')[0];
         const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        const response = await fetch(
-          `/api/mongodb/query?collection=employee_work_data&employeeId=${employeeId}&filters=${JSON.stringify({ date: { $gte: startDate, $lte: endDate } })}`
-        );
-        const result = await response.json();
-
-        if (result.success && result.data && result.data.length > 0) {
-          // Transform MongoDB data to ActivityData format
+        const response = await workTrackingAPI.getWorkDataRange(employeeId, startDate, endDate);
+        
+        if (response.data.success && response.data.data && response.data.data.length > 0) {
+          // Transform API data to ActivityData format
           const grouped: Record<string, ActivityData> = {};
-          result.data.forEach((item: any) => {
-            if (!grouped[item.date]) {
-              grouped[item.date] = {
-                date: item.date,
+          response.data.data.forEach((item: any) => {
+            const dateStr = item.date instanceof Date ? item.date.toISOString().split('T')[0] : item.date;
+            if (!grouped[dateStr]) {
+              grouped[dateStr] = {
+                date: dateStr,
                 hoursWorked: 0,
+                tasksCompleted: 0,
+                logins: 1,
+                productivity: 0,
+              };
+            }
+            grouped[dateStr].hoursWorked += item.hoursWorked || 0;
+            grouped[dateStr].tasksCompleted += item.tasksCompleted || 0;
+            grouped[dateStr].productivity = Math.max(grouped[dateStr].productivity, item.productivity || 0);
+          });
+
+          const data = Object.values(grouped).sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          setActivityData(data.length > 0 ? data : activityData);
+        }
+      } catch (error) {
+        console.error('Error loading activity data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadActivityData();
+  }, [employeeId]);
                 tasksCompleted: 0,
                 logins: 0,
                 productivity: 0,
