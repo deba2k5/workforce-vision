@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { User, Mail, Phone, Building2, Calendar, Briefcase, Edit2, Save, X } from 'lucide-react';
+import { User, Mail, Phone, Building2, Calendar, Briefcase, Edit2, Save, X, Download, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { jsPDF } from 'jspdf';
 
 export function EmployeeProfile() {
   const [isEditing, setIsEditing] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [profile, setProfile] = useState({
     fullName: 'Ana Kowalski',
     email: 'ana.kowalski@company.com',
@@ -19,11 +21,6 @@ export function EmployeeProfile() {
 
   const [editData, setEditData] = useState(profile);
 
-  const handleEdit = () => {
-    setIsEditing(true);
-    setEditData(profile);
-  };
-
   const handleSave = () => {
     setProfile(editData);
     setIsEditing(false);
@@ -35,6 +32,62 @@ export function EmployeeProfile() {
 
   const handleChange = (field: string, value: string) => {
     setEditData({ ...editData, [field]: value });
+  };
+
+  const generateProfilePDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      let yPosition = 20;
+
+      // Header
+      pdf.setFontSize(20);
+      pdf.text('Employee Profile Report', pageWidth / 2, yPosition, { align: 'center' });
+
+      pdf.setFontSize(10);
+      pdf.setTextColor(100);
+      yPosition += 10;
+      pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' });
+
+      // Main Profile Info
+      yPosition += 20;
+      pdf.setFontSize(14);
+      pdf.setTextColor(0);
+      pdf.text('Employee Information', 20, yPosition);
+
+      yPosition += 15;
+      pdf.setFontSize(10);
+      const profileData = [
+        ['Full Name:', profile.fullName],
+        ['Email:', profile.email],
+        ['Mobile:', profile.mobile],
+        ['Department:', profile.department],
+        ['Position:', profile.position],
+        ['Manager:', profile.manager],
+        ['Date of Joining:', profile.dateOfJoining],
+        ['Employment Type:', profile.employmentType],
+      ];
+
+      profileData.forEach(([label, value]) => {
+        pdf.text(label, 25, yPosition);
+        pdf.setTextColor(0, 102, 204);
+        pdf.text(value, 90, yPosition);
+        pdf.setTextColor(0);
+        yPosition += 8;
+      });
+
+      // Footer
+      pdf.setFontSize(8);
+      pdf.setTextColor(150);
+      pdf.text('This is an official employee profile document', pageWidth / 2, pdf.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+      pdf.save(`${profile.fullName.replace(/\s+/g, '_')}_Profile_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   return (
@@ -53,16 +106,33 @@ export function EmployeeProfile() {
                 <p className="text-xs text-muted-foreground mt-1">{profile.employmentType} • {profile.department}</p>
               </div>
             </div>
-            {!isEditing && (
-              <Button
-                onClick={handleEdit}
-                variant="outline"
-                className="gap-2"
-              >
-                <Edit2 className="h-4 w-4" />
-                Edit Profile
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {!isEditing && (
+                <>
+                  <Button
+                    onClick={generateProfilePDF}
+                    disabled={isGeneratingPDF}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    {isGeneratingPDF ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Download PDF
+                  </Button>
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
       </Card>

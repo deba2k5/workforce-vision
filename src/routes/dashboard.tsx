@@ -1,13 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { LogOut, Menu, X } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { WorkTracking } from '../components/dashboard/WorkTracking'
-import { MultimediaUpload } from '../components/dashboard/MultimediaUpload'
-import { DailyWorkReport } from '../components/dashboard/DailyWorkReport'
 import { EmployeeProfile } from '../components/employee/EmployeeProfile'
 import { TopBar } from '../components/dashboard/TopBar'
+import { TaskManager } from '../components/dashboard/TaskManager'
+import { LoginCalendar } from '../components/dashboard/LoginCalendar'
+import { WorkingHourHeatmap } from '../components/dashboard/WorkingHourHeatmap'
+import { ActivityReport } from '../components/dashboard/ActivityReport'
 import { useNavigate } from '@tanstack/react-router'
 
 function DashboardPage() {
@@ -60,10 +62,12 @@ function DashboardPage() {
         <TopBar />
 
         <Tabs defaultValue="work" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-6 overflow-auto">
             <TabsTrigger value="work">Work Tracking</TabsTrigger>
-            <TabsTrigger value="multimedia">Multimedia</TabsTrigger>
-            <TabsTrigger value="report">Daily Report</TabsTrigger>
+            <TabsTrigger value="activity">Activity Report</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="calendar">Login Calendar</TabsTrigger>
+            <TabsTrigger value="heatmap">Performance</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -71,12 +75,20 @@ function DashboardPage() {
             <WorkTracking />
           </TabsContent>
 
-          <TabsContent value="multimedia" className="space-y-6">
-            <MultimediaUpload />
+          <TabsContent value="activity" className="space-y-6">
+            <ActivityReport />
           </TabsContent>
 
-          <TabsContent value="report" className="space-y-6">
-            <DailyWorkReport />
+          <TabsContent value="tasks" className="space-y-6">
+            <TaskManager />
+          </TabsContent>
+
+          <TabsContent value="calendar" className="space-y-6">
+            <LoginCalendar />
+          </TabsContent>
+
+          <TabsContent value="heatmap" className="space-y-6">
+            <WorkingHourHeatmap />
           </TabsContent>
 
           <TabsContent value="profile" className="space-y-6">

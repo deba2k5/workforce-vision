@@ -1,82 +1,69 @@
-import { useState } from 'react';
-import { CheckCircle, XCircle, MessageSquare, Download, Image as ImageIcon, FileVideo } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { useEffect, useState } from "react";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
-
-interface PendingReport {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  date: string;
-  totalHours: number;
-  workTypes: string[];
-  attachments: number;
-  submittedAt: string;
-}
+  CheckCircle,
+  XCircle,
+  MessageSquare,
+  Download,
+  Image as ImageIcon,
+  FileVideo,
+} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import {
+  type PendingReport,
+} from "../../lib/liveTracking";
+import { fetchPendingReports, updateReportStatusClient } from "../../lib/api/liveTracking.functions";
 
 export function ReportReview() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
+  const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [pendingReports, setPendingReports] = useState<PendingReport[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data
-  const pendingReports: PendingReport[] = [
-    {
-      id: 'RPT001',
-      employeeId: 'EMP001',
-      employeeName: 'Ana Kowalski',
-      date: '2026-06-01',
-      totalHours: 8.5,
-      workTypes: ['On-Site Field Work', 'Office Administration'],
-      attachments: 4,
-      submittedAt: '2026-06-01 18:30',
-    },
-    {
-      id: 'RPT002',
-      employeeId: 'EMP002',
-      employeeName: 'James Wilson',
-      date: '2026-06-01',
-      totalHours: 7.5,
-      workTypes: ['Remote Work', 'Client Meeting'],
-      attachments: 2,
-      submittedAt: '2026-06-01 18:15',
-    },
-    {
-      id: 'RPT003',
-      employeeId: 'EMP003',
-      employeeName: 'Sofia Garcia',
-      date: '2026-06-01',
-      totalHours: 8.0,
-      workTypes: ['Office Administration'],
-      attachments: 1,
-      submittedAt: '2026-06-01 17:45',
-    },
-  ];
+  useEffect(() => {
+    // Fetch initial data
+    (async () => {
+      const reportsData = await fetchPendingReports();
+      setPendingReports(reportsData as unknown as PendingReport[]);
+      setLoading(false);
+    })();
+
+    // Poll MongoDB every second for updates
+    const interval = setInterval(async () => {
+      try {
+        const reportsData = await fetchPendingReports();
+        setPendingReports(reportsData as unknown as PendingReport[]);
+      } catch (error) {
+        console.error("Error fetching reports:", error);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const selectedReportData = pendingReports.find((r) => r.id === selectedReport);
 
-  const handleApprove = () => {
-    alert(`Report ${selectedReport} approved!`);
+  const handleApprove = async () => {
+    if (!selectedReport) return;
+
+    await updateReportStatusClient({ data: { reportId: selectedReport, status: "approved" } });
     setSelectedReport(null);
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!rejectReason.trim()) {
-      alert('Please provide a reason for rejection');
+      alert("Please provide a reason for rejection");
       return;
     }
-    alert(`Report ${selectedReport} rejected!\nReason: ${rejectReason}`);
+
+    if (!selectedReport) return;
+
+    await updateReportStatusClient({ data: { reportId: selectedReport, status: "rejected", rejectionReason: rejectReason } });
     setSelectedReport(null);
-    setRejectReason('');
+    setRejectReason("");
     setShowRejectForm(false);
   };
 
@@ -106,7 +93,7 @@ export function ReportReview() {
                     <TableRow
                       key={report.id}
                       onClick={() => setSelectedReport(report.id)}
-                      className={`cursor-pointer ${selectedReport === report.id ? 'bg-muted' : 'hover:bg-muted/50'}`}
+                      className={`cursor-pointer ${selectedReport === report.id ? "bg-muted" : "hover:bg-muted/50"}`}
                     >
                       <TableCell className="font-medium">{report.employeeName}</TableCell>
                       <TableCell className="text-sm">{report.date}</TableCell>
@@ -117,6 +104,16 @@ export function ReportReview() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {!loading && pendingReports.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
+                        No submitted Firestore reports for employee1@sinhas.ch.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -183,7 +180,10 @@ export function ReportReview() {
                 <p className="text-sm text-muted-foreground mb-2">Attachments</p>
                 <div className="grid grid-cols-2 gap-2">
                   {Array.from({ length: selectedReportData.attachments }).map((_, idx) => (
-                    <div key={idx} className="aspect-square rounded-lg bg-muted border border-border flex items-center justify-center">
+                    <div
+                      key={idx}
+                      className="aspect-square rounded-lg bg-muted border border-border flex items-center justify-center"
+                    >
                       {idx % 2 === 0 ? (
                         <ImageIcon className="h-6 w-6 text-muted-foreground" />
                       ) : (
@@ -233,7 +233,7 @@ export function ReportReview() {
                     <Button
                       onClick={() => {
                         setShowRejectForm(false);
-                        setRejectReason('');
+                        setRejectReason("");
                       }}
                       variant="outline"
                       className="flex-1"
@@ -249,7 +249,9 @@ export function ReportReview() {
       ) : (
         <Card className="lg:col-span-1">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground text-center">Select a report to view details</p>
+            <p className="text-sm text-muted-foreground text-center">
+              Select a report to view details
+            </p>
           </CardContent>
         </Card>
       )}

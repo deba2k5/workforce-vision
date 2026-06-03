@@ -1,177 +1,317 @@
-import { useState } from 'react';
-import { MapPin, Clock, AlertCircle, TrendingUp, Users, FileCheck } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
+import { useEffect, useMemo, useState } from "react";
+import L from "leaflet";
+import "leaflet.heat";
+import "leaflet-draw";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
+  Circle,
+  CircleMarker,
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
+import { AlertCircle, Clock, FileCheck, MapPin, Users } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import {
+  GEOFENCE_RADIUS_METERS,
+  TRACKED_EMPLOYEE_EMAIL,
+  type LiveLocation,
+  seedTestLocationData,
+} from "../../lib/liveTracking";
+import { fetchLiveEmployee, fetchPendingReports } from "../../lib/api/liveTracking.functions";
+import { updateLiveLocationMongo } from "../../lib/api/liveTracking.server";
 
-interface EmployeeStatus {
-  id: string;
-  name: string;
-  department: string;
-  status: 'on-duty' | 'on-break' | 'off-duty';
-  workType: string;
-  hoursWorked: number;
-  location: string;
-  accuracy: number;
-  inBoundary: boolean;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: new URL("leaflet/dist/images/marker-icon-2x.png", import.meta.url).toString(),
+  iconUrl: new URL("leaflet/dist/images/marker-icon.png", import.meta.url).toString(),
+  shadowUrl: new URL("leaflet/dist/images/marker-shadow.png", import.meta.url).toString(),
+});
+
+function statusBadgeVariant(status: string): "default" | "secondary" | "outline" | "destructive" {
+  if (status === "on-duty") return "default";
+  if (status === "on-break" || status === "paused") return "secondary";
+  if (status === "off-duty") return "outline";
+  return "destructive";
+}
+
+function statusText(status: string) {
+  switch (status) {
+    case "on-duty":
+      return "On Duty";
+    case "on-break":
+      return "On Break";
+    case "off-duty":
+      return "Off Duty";
+    case "paused":
+      return "Paused";
+    default:
+      return status;
+  }
+}
+
+function HeatLayer({ points }: { points: [number, number, number][] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!points.length || !L.heatLayer) return;
+
+    const layer = L.heatLayer(points, {
+      radius: 28,
+      blur: 18,
+      maxZoom: 17,
+      gradient: { 0.2: "#22c55e", 0.5: "#f59e0b", 1: "#ef4444" },
+    }).addTo(map);
+
+    return () => {
+      layer.remove();
+    };
+  }, [map, points]);
+
+  return null;
+}
+
+function RecenterMap({ employee }: { employee: LiveLocation }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView([employee.latitude, employee.longitude], Math.max(map.getZoom(), 16));
+  }, [employee.latitude, employee.longitude, map]);
+
+  return null;
 }
 
 export function AdminDashboard() {
+  const [employee, setEmployee] = useState<LiveLocation | null>(null);
+  const [pendingReports, setPendingReports] = useState(0);
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [isSeedingData, setIsSeedingData] = useState(false);
 
-  // Mock data
-  const liveEmployees: EmployeeStatus[] = [
-    {
-      id: 'EMP001',
-      name: 'Ana Kowalski',
-      department: 'Operations',
-      status: 'on-duty',
-      workType: 'On-Site Field Work',
-      hoursWorked: 6.5,
-      location: 'Building A, Floor 3',
-      accuracy: 15,
-      inBoundary: true,
-    },
-    {
-      id: 'EMP002',
-      name: 'James Wilson',
-      department: 'Field Service',
-      status: 'on-duty',
-      workType: 'Remote Work',
-      hoursWorked: 5.2,
-      location: 'Home Office',
-      accuracy: 8,
-      inBoundary: true,
-    },
-    {
-      id: 'EMP003',
-      name: 'Sofia Garcia',
-      department: 'Operations',
-      status: 'on-break',
-      workType: 'Office Administration',
-      hoursWorked: 4.0,
-      location: 'Cafeteria',
-      accuracy: 12,
-      inBoundary: true,
-    },
-    {
-      id: 'EMP004',
-      name: 'Michael Chen',
-      department: 'Field Service',
-      status: 'on-duty',
-      workType: 'Client Meeting',
-      hoursWorked: 3.5,
-      location: 'Outside boundary',
-      accuracy: 25,
-      inBoundary: false,
-    },
-  ];
+  useEffect(() => {
+    // Fetch initial data
+    (async () => {
+      const [employeeData, reportsData] = await Promise.all([
+        fetchLiveEmployee(),
+        fetchPendingReports(),
+      ]);
+      setEmployee(employeeData);
+      setPendingReports(reportsData.length);
+    })();
+
+    // Poll MongoDB every second for real-time updates
+    const interval = setInterval(async () => {
+      try {
+        const [employeeData, reportsData] = await Promise.all([
+          fetchLiveEmployee(),
+          fetchPendingReports(),
+        ]);
+        setEmployee(employeeData);
+        setPendingReports(reportsData.length);
+      } catch (error) {
+        console.error("Error fetching live data:", error);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const lastSeenMs = employee?.lastUpdated?.getTime() ?? 0;
+  const isOnline =
+    Boolean(employee) && employee?.status !== "off-duty" && now - lastSeenMs <= 70000;
+  const lastSeenText = employee?.lastUpdated
+    ? employee.lastUpdated.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "Never";
 
   const stats = {
-    totalEmployees: 42,
-    onDuty: 28,
-    onBreak: 8,
-    offDuty: 6,
-    pendingReports: 5,
-    boundaryViolations: 1,
+    totalEmployees: employee ? 1 : 0,
+    onDuty: isOnline && employee?.status === "on-duty" ? 1 : 0,
+    onBreak: employee?.status === "on-break" ? 1 : 0,
+    boundaryViolations: employee && !employee.inBoundary ? 1 : 0,
+    pendingReports,
   };
 
-  const statusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'on-duty':
-        return 'default';
-      case 'on-break':
-        return 'secondary';
-      case 'off-duty':
-        return 'outline';
-      default:
-        return 'default';
-    }
-  };
+  const heatPoints = useMemo<[number, number, number][]>(
+    () =>
+      employee ? [[employee.latitude, employee.longitude, employee.inBoundary ? 0.55 : 1]] : [],
+    [employee],
+  );
 
-  const statusText = (status: string) => {
-    switch (status) {
-      case 'on-duty':
-        return 'On Duty';
-      case 'on-break':
-        return 'On Break';
-      case 'off-duty':
-        return 'Off Duty';
-      default:
-        return status;
+  const mapCenter: [number, number] = employee
+    ? [employee.latitude, employee.longitude]
+    : [47.3769, 8.5417];
+
+  const handleSeedTestData = async () => {
+    try {
+      setIsSeedingData(true);
+      await seedTestLocationData();
+      // Fetch updated data immediately after seeding
+      const [employeeData, reportsData] = await Promise.all([
+        fetchLiveEmployee(),
+        fetchPendingReports(),
+      ]);
+      setEmployee(employeeData);
+      setPendingReports(reportsData.length);
+    } catch (error) {
+      console.error("Failed to seed test data:", error);
+    } finally {
+      setIsSeedingData(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Users className="h-4 w-4" />
-              Total Employees
+              Connected Employees
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stats.totalEmployees}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active in system</p>
+            <p className="mt-1 text-xs text-muted-foreground">Only {TRACKED_EMPLOYEE_EMAIL}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Clock className="h-4 w-4" />
               Currently On Duty
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">{stats.onDuty}</div>
-            <p className="text-xs text-muted-foreground mt-1">{stats.onBreak} on break</p>
+            <p className="mt-1 text-xs text-muted-foreground">{stats.onBreak} on break</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <AlertCircle className="h-4 w-4" />
-              Alerts
+              Geofence Alerts
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-600">{stats.boundaryViolations}</div>
-            <p className="text-xs text-muted-foreground mt-1">Boundary violations</p>
+            <p className="mt-1 text-xs text-muted-foreground">100m boundary violations</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <FileCheck className="h-4 w-4" />
               Pending Reports
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-amber-600">{stats.pendingReports}</div>
-            <p className="text-xs text-muted-foreground mt-1">Awaiting approval</p>
+            <p className="mt-1 text-xs text-muted-foreground">Firestore submitted reports</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Live Monitoring */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Live Employee Map</CardTitle>
+          <CardDescription>
+            Leaflet map, cluster marker, heatmap, and 100m geofence for {TRACKED_EMPLOYEE_EMAIL}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {employee && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted p-3">
+              <div>
+                <p className="text-sm font-medium">{employee.employeeName}</p>
+                <p className="text-xs text-muted-foreground">
+                  Last location update: {lastSeenText}
+                </p>
+              </div>
+              <Badge variant={isOnline ? "default" : "outline"}>
+                {isOnline ? "Online and active" : "Offline"}
+              </Badge>
+            </div>
+          )}
+          <div className="h-[430px] overflow-hidden rounded-lg border border-border">
+            <MapContainer center={mapCenter} zoom={employee ? 16 : 12} className="h-full w-full">
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <HeatLayer points={heatPoints} />
+              {employee && (
+                <>
+                  <RecenterMap employee={employee} />
+                  {employee.geofenceLatitude && employee.geofenceLongitude && (
+                    <Circle
+                      center={[employee.geofenceLatitude, employee.geofenceLongitude]}
+                      radius={employee.geofenceRadius || GEOFENCE_RADIUS_METERS}
+                      pathOptions={{
+                        color: employee.inBoundary ? "#16a34a" : "#dc2626",
+                        fillColor: employee.inBoundary ? "#22c55e" : "#ef4444",
+                        fillOpacity: 0.12,
+                      }}
+                    />
+                  )}
+                  <MarkerClusterGroup chunkedLoading>
+                    <Marker position={[employee.latitude, employee.longitude]}>
+                      <Popup>
+                        <div className="space-y-1 text-sm">
+                          <strong>{employee.employeeName}</strong>
+                          <div>{isOnline ? statusText(employee.status) : "Offline"}</div>
+                          <div>Accuracy: {Math.round(employee.accuracy)}m</div>
+                          <div>
+                            Lat/Lng: {employee.latitude.toFixed(6)}, {employee.longitude.toFixed(6)}
+                          </div>
+                          <div>Last update: {lastSeenText}</div>
+                          <div>Boundary: {employee.inBoundary ? "Inside" : "Outside"}</div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </MarkerClusterGroup>
+                  <CircleMarker
+                    center={[employee.latitude, employee.longitude]}
+                    radius={10}
+                    pathOptions={{
+                      color: employee.inBoundary ? "#16a34a" : "#dc2626",
+                      fillColor: employee.inBoundary ? "#22c55e" : "#ef4444",
+                      fillOpacity: 0.35,
+                    }}
+                  />
+                </>
+              )}
+            </MapContainer>
+          </div>
+          {!employee && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Waiting for employee1@sinhas.ch to allow GPS and publish a live location.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Real-Time Employee Monitoring</CardTitle>
-          <CardDescription>Live status and location of all employees</CardDescription>
+          <CardDescription>Live Firestore status for the connected employee only</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -188,99 +328,78 @@ export function AdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {liveEmployees.map((emp) => (
-                  <TableRow key={emp.id} className={selectedEmployee === emp.id ? 'bg-muted' : ''}>
-                    <TableCell className="font-medium">{emp.name}</TableCell>
-                    <TableCell>{emp.department}</TableCell>
+                {employee ? (
+                  <TableRow className={selectedEmployee === employee.employeeId ? "bg-muted" : ""}>
+                    <TableCell className="font-medium">
+                      <div>{employee.employeeName}</div>
+                      <div className="text-xs text-muted-foreground">{employee.employeeEmail}</div>
+                      <div className="mt-1">
+                        <Badge variant={isOnline ? "default" : "outline"}>
+                          {isOnline ? "Online" : "Offline"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>{employee.department}</TableCell>
                     <TableCell>
-                      <Badge variant={statusBadgeVariant(emp.status)}>
-                        {statusText(emp.status)}
+                      <Badge variant={statusBadgeVariant(employee.status)}>
+                        {isOnline ? statusText(employee.status) : "Offline"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{emp.workType}</TableCell>
-                    <TableCell className="text-sm font-medium">{emp.hoursWorked}h</TableCell>
+                    <TableCell className="text-sm">{employee.workType}</TableCell>
+                    <TableCell className="text-sm font-medium">{employee.hoursWorked}h</TableCell>
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {emp.location}
-                        {!emp.inBoundary && (
-                          <AlertCircle className="h-4 w-4 text-red-500 ml-1" />
+                        {employee.latitude.toFixed(5)}, {employee.longitude.toFixed(5)}
+                        {!employee.inBoundary && (
+                          <AlertCircle className="ml-1 h-4 w-4 text-red-500" />
                         )}
                       </div>
+                      <div className="text-xs text-muted-foreground">
+                        {employee.distanceFromGeofence === null
+                          ? "No geofence started"
+                          : `${employee.distanceFromGeofence}m from geofence center`}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Last seen: {lastSeenText}</div>
                     </TableCell>
                     <TableCell>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setSelectedEmployee(emp.id)}
+                        onClick={() => setSelectedEmployee(employee.employeeId)}
                       >
                         View
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="py-8 text-center text-sm text-muted-foreground"
+                    >
+                      <div className="space-y-3">
+                        <p>No live Firestore data yet.</p>
+                        <Button
+                          onClick={handleSeedTestData}
+                          disabled={isSeedingData}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {isSeedingData ? "Creating test data..." : "Create Test Location Data"}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          Or log in as employee1@sinhas.ch on the employee dashboard to start tracking.
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
-
-      {/* Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Top Work Types
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              {[
-                { type: 'On-Site Field Work', hours: 156, percentage: 38 },
-                { type: 'Office Administration', hours: 128, percentage: 31 },
-                { type: 'Remote Work', hours: 92, percentage: 22 },
-                { type: 'Client Meeting', hours: 34, percentage: 8 },
-              ].map((item, idx) => (
-                <div key={idx}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium">{item.type}</span>
-                    <span className="text-sm text-muted-foreground">{item.hours}h</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary rounded-full h-2"
-                      style={{ width: `${item.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance Rate (This Week)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => (
-                <div key={day} className="text-center">
-                  <div className="text-2xl font-bold text-primary">92%</div>
-                  <div className="text-xs text-muted-foreground">{day}</div>
-                </div>
-              ))}
-              <div className="col-span-2">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">92%</div>
-                  <div className="text-xs text-muted-foreground">Average</div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
